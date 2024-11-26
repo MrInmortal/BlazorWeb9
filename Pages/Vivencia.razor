@@ -1,0 +1,147 @@
+﻿@page "/vivencias"
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject NavigationManager NavigationManager
+@using System.Text.Json
+@using BlazorInputFile
+
+@if (!isAuthenticated)
+{
+    <p>Navegando al login...</p>
+    NavigationManager.NavigateTo("/login");
+}
+else
+{
+    <h1>Registro de Vivencias</h1>
+    <div class="form-wrapper">
+        <EditForm Model="@vivenciaModel" OnValidSubmit="AgregarVivencia">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+            <div class="input-group">
+                <label for="titulo">Título</label>
+                <input id="titulo" @bind="vivenciaModel.Titulo" />
+            </div>
+            <div class="input-group">
+                <label for="descripcion">Descripción</label>
+                <textarea id="descripcion" @bind="vivenciaModel.Descripcion"></textarea>
+            </div>
+            <div class="input-group">
+                <label for="fecha">Fecha</label>
+                <input id="fecha" type="date" @bind="vivenciaModel.Fecha" />
+            </div>
+            <div class="input-group">
+                <label for="imagen">Imagen</label>
+                <input id="imagen" type="file" @onchange="OnFileSelected" />
+            </div>
+            <button type="submit" class="btn-primary">Agregar Vivencia</button>
+        </EditForm>
+    </div>
+
+    <h2>Tus Vivencias</h2>
+    <div class="vivencias-list">
+        @foreach (var vivencia in vivencias)
+        {
+            <div class="vivencia-item">
+                <h3>@vivencia.Titulo</h3>
+                <p>@vivencia.Descripcion</p>
+                <p><strong>Fecha:</strong> @vivencia.Fecha.ToShortDateString()</p>
+                @if (!string.IsNullOrEmpty(vivencia.Imagen))
+                {
+                    <img src="data:image/png;base64,@vivencia.Imagen" alt="Imagen vivencia" width="200" />
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private VivenciaModel vivenciaModel = new();
+    private bool isAuthenticated = false;
+    private List<VivenciaEntry> vivencias = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userJson = await LocalStorage.GetItemAsync<string>("currentUser");
+        if (string.IsNullOrEmpty(userJson))
+        {
+            isAuthenticated = false;
+        }
+        else
+        {
+            isAuthenticated = true;
+            var vivenciasJson = await LocalStorage.GetItemAsync<string>("vivencias");
+            vivencias = string.IsNullOrEmpty(vivenciasJson) ? new List<VivenciaEntry>() : JsonSerializer.Deserialize<List<VivenciaEntry>>(vivenciasJson);
+        }
+    }
+
+    private async Task AgregarVivencia()
+    {
+        var nuevaVivencia = new VivenciaEntry
+        {
+            Titulo = vivenciaModel.Titulo,
+            Descripcion = vivenciaModel.Descripcion,
+            Fecha = vivenciaModel.Fecha,
+            Imagen = vivenciaModel.Imagen
+        };
+
+        vivencias.Add(nuevaVivencia);
+        await LocalStorage.SetItemAsync("vivencias", JsonSerializer.Serialize(vivencias));
+        vivenciaModel = new VivenciaModel();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file != null)
+        {
+            using var stream = new MemoryStream();
+            await file.OpenReadStream().CopyToAsync(stream);
+            vivenciaModel.Imagen = Convert.ToBase64String(stream.ToArray());
+        }
+    }
+
+    public class VivenciaModel
+    {
+        public string Titulo { get; set; } = string.Empty;
+        public string Descripcion { get; set; } = string.Empty;
+        public DateTime Fecha { get; set; } = DateTime.Now;
+        public string? Imagen { get; set; }
+    }
+
+    public class VivenciaEntry
+    {
+        public string Titulo { get; set; }
+        public string Descripcion { get; set; }
+        public DateTime Fecha { get; set; }
+        public string? Imagen { get; set; }
+    }
+}
+
+<style>
+    .vivencias-list {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .vivencia-item {
+        background-color: #f9f9f9;
+        padding: 10px;
+        border-radius: 8px;
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .vivencia-item h3 {
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+
+    .vivencia-item p {
+        font-size: 16px;
+        margin-bottom: 10px;
+    }
+
+    .vivencia-item img {
+        margin-top: 10px;
+        border-radius: 4px;
+    }
+</style>
